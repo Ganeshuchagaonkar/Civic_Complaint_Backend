@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from rest_framework.decorators import api_view
+from rest_framework_simplejwt.state import User
 from .serializers import ComplaintSerializer
 from .models import Complaints
 from rest_framework.response import Response
@@ -70,9 +71,9 @@ def OfficerHome(request, id):
         try:
             officer_total = Complaints.objects.filter(city_id=officer.city_id).count()
             officer_total_pending_issues = Complaints.objects.filter(city_id=officer.city_id,
-                                                                     progress__lt="100").count()
+                                                                     progress__lt=100).count()
             officer_total_resolved_issues = Complaints.objects.filter(city_id=officer.city_id,
-                                                                      status="completed").count()
+                                                                      progress=100).count()
             users_under_officer = Users.objects.filter(city_id=officer.city_id).distinct().count()
             users_under_officer -= 1
             jsonResponse = {
@@ -115,13 +116,30 @@ def LatestComplaints(request):
         serializer = ComplaintSerializer(complaints, many=True)
         return Response(serializer.data)
 
+@api_view(['GET'])
+def OfficerLatestComplaints(request,pk):
+    if request.method == 'GET':
+        user = User.objects.filter(id=pk)
+        complaints = Complaints.objects.filter(city_id=user.city_id).order_by('-comp_id')[:2]
+        serializer = ComplaintSerializer(complaints, many=True)
+        return Response(serializer.data)
+
 
 @api_view(['GET'])
 def PendingComplaints(request):
     if request.method == 'GET':
-        pending_complaints = Complaints.objects.filter(status="pending")
+        pending_complaints = Complaints.objects.filter(progress__lt=100)
         serializer = ComplaintSerializer(pending_complaints, many=True)
         return Response(serializer.data)
+
+
+@api_view(['GET'])
+def OfficerPendingComplaints(request,pk):
+    if request.method == 'GET':
+        officer = Users.objects.get(id=pk)
+        pending_complaints = Complaints.objects.filter(progress__lt=100,city_id=officer.city_id)
+        serializer = ComplaintSerializer(pending_complaints, many=True)
+        return Response(serializer.data)        
 
 
 @api_view(['GET'])
@@ -131,6 +149,13 @@ def ResolvedComplaints(request):
         serializer = ComplaintSerializer(pending_complaints, many=True)
         return Response(serializer.data)
 
+@api_view(['GET'])
+def ResolvedComplaintsOfficer(request,pk):
+    if request.method == 'GET':
+        officer = Users.objects.get(id=pk)
+        pending_complaints = Complaints.objects.filter(progress=100,city_id=officer.city_id)
+        serializer = ComplaintSerializer(pending_complaints, many=True)
+        return Response(serializer.data)
 
 @api_view(['POST'])
 def DeleteComplaints(request, comp_id):
@@ -142,3 +167,18 @@ def DeleteComplaints(request, comp_id):
         except:
             return Response({"message": "comlpaint not found"})
     return HttpResponseBadRequest()
+
+@api_view(['POST'])
+def UpdateComplaints(request):
+    if request.method == 'POST':
+        status = request.data['status']
+        progress = request.data['progress']
+        action_taken = request.data['action_taken']
+        complaint_id = request.data['complaint_id']
+        try:
+            Complaints.objects.filter(comp_id=complaint_id).update(status=status, progress=progress, action_taken=action_taken)
+            return Response({"message": "complaint updated succesfully","status":1})
+        except Exception as e:
+            print(e)
+            return Response({"message": "comlpaint not found","status":0})
+    return HttpResponseBadRequest()    

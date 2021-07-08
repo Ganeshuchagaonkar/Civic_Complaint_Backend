@@ -31,6 +31,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         # Add extra responses here
         data['name'] = self.user.name
+        data['user_id']=self.user.id
         data['email'] = self.user.email
         data['phone'] = self.user.phone
         data['country'] = self.user.country
